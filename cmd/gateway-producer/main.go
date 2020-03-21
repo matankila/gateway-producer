@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -17,14 +18,24 @@ var (
 	client *redis.Client
 )
 
+type response struct {
+	IsError bool
+	Error   string
+	Result  interface{}
+}
+
 func getBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	resp := response{}
 	keyToSearch := "bd-" + ps.ByName("businessDomainName")
 	val, err := client.Get(keyToSearch).Result()
 	if err != nil {
-		fmt.Printf("Failed to fetch from DB: %s\n", err)
+		resp.IsError = true
+		resp.Error = fmt.Sprintf("Failed to fetch from DB, %s", err)
+	} else {
+		resp.Result = fmt.Sprintf("key: %s, value: %s", keyToSearch, val)
 	}
 
-	fmt.Fprintf(w, "key: %s, value: %s\n", keyToSearch, val)
+	json.NewEncoder(w).Encode(resp)
 }
 
 func createBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {

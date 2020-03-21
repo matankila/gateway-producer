@@ -4,6 +4,7 @@ My gateway-producer
 this code uses dependencies of:
  * streadway/amqp
  * julienschmidt/httprouter
+ * go-redis/redis
  
 This project goes with another project called consumer (found in another repo),
 Both uses as POC to rabbitmq producer consumer, and working with redis.

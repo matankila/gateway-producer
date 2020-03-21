@@ -39,10 +39,12 @@ func getBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func createBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	resp := response{}
 	keyToSet := "bd-" + ps.ByName("businessDomainName")
 	err := client.Set(keyToSet, "pending", 0).Err()
 	if err != nil {
-		fmt.Printf("Failed to set DB: %s\n", err)
+		resp.IsError = true
+		resp.Error = fmt.Sprintf("Failed to set DB: %s", err)
 	}
 
 	ch, err := conn.Channel()
@@ -72,7 +74,7 @@ func createBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		})
 	log.Printf(" [x] Sent %s", body)
 	failOnError(err, "Failed to publish a message")
-	fmt.Fprintf(w, "{}")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func failOnError(err error, msg string) {

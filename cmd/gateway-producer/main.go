@@ -21,17 +21,17 @@ func getBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	keyToSearch := "bd-" + ps.ByName("businessDomainName")
 	val, err := client.Get(keyToSearch).Result()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to fetch from DB: %s\n", err)
 	}
 
-	fmt.Println(keyToSearch, val)
+	fmt.Fprintf(w, "key: %s, value: %s\n", keyToSearch, val)
 }
 
 func createBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	keyToSet := "bd-" + ps.ByName("businessDomainName")
 	err := client.Set(keyToSet, "panding", 0).Err()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to set DB: %s\n", err)
 	}
 
 	ch, err := conn.Channel()

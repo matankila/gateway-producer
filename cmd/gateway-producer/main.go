@@ -2,49 +2,38 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 
+	"github.com/go-redis/redis"
+	"github.com/julienschmidt/httprouter"
 	"github.com/streadway/amqp"
 )
 
 var (
-	conn *amqp.Connection
-	err  error
+	conn   *amqp.Connection
+	err    error
+	client *redis.Client
 )
 
-func getBD(w http.ResponseWriter, req *http.Request) {
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
+func getBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	keyToSearch := "bd-" + ps.ByName("businessDomainName")
+	val, err := client.Get(keyToSearch).Result()
+	if err != nil {
+		panic(err)
+	}
 
-	_, err = ch.QueueDeclare(
-		"BD",  // name
-		false, // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-
-	failOnError(err, "Failed to declare a queue")
-	body := ""
-	err = ch.Publish(
-		"",    // exchange
-		"BD",  // routing key
-		false, // mandatory
-		false, // immediate
-		amqp.Publishing{
-			Headers:     map[string]interface{}{"entry": "bitcore", "req": "get"},
-			ContentType: "text/plain",
-			Body:        []byte(body),
-		})
-	log.Printf(" [x] Sent %s", body)
-	failOnError(err, "Failed to publish a message")
-	fmt.Fprintf(w, "get BD")
+	fmt.Println(keyToSearch, val)
 }
 
-func createBD(w http.ResponseWriter, req *http.Request) {
+func createBD(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	keyToSet := "bd-" + ps.ByName("businessDomainName")
+	err := client.Set(keyToSet, "panding", 0).Err()
+	if err != nil {
+		panic(err)
+	}
+
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
@@ -59,20 +48,20 @@ func createBD(w http.ResponseWriter, req *http.Request) {
 	)
 
 	failOnError(err, "Failed to declare a queue")
-	body := "{\"config\": {\"users\": [\"IPG\"]}}"
+	body, err := ioutil.ReadAll(r.Body)
 	err = ch.Publish(
 		"",    // exchange
 		"BD",  // routing key
 		false, // mandatory
 		false, // immediate
 		amqp.Publishing{
-			Headers:     map[string]interface{}{"entry": "bitcore", "req": "post"},
+			Headers:     map[string]interface{}{"entry": ps.ByName("businessDomainName"), "request": r.Method},
 			ContentType: "application/json",
-			Body:        []byte(body),
+			Body:        body,
 		})
 	log.Printf(" [x] Sent %s", body)
 	failOnError(err, "Failed to publish a message")
-	fmt.Fprintf(w, "Create BD")
+	fmt.Fprintf(w, "{}")
 }
 
 func failOnError(err error, msg string) {
@@ -81,18 +70,19 @@ func failOnError(err error, msg string) {
 	}
 }
 
-// TODO: use httprouter
 func main() {
+	client = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
 	conn, err = amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 
-	//TODO: change it to /BD/:BD
-	http.HandleFunc("/getBD", getBD)
-
-	// TODO: change it to work with POST
-	// TODO: change it to: /BD/:BD
-	// TODO: send body param of request.
-	http.HandleFunc("/newBD", createBD)
-	http.ListenAndServe(":8090", nil)
+	router := httprouter.New()
+	router.GET("/cd/business-domains/:businessDomainName", getBD)
+	router.POST("/cd/business-domains/:businessDomainName", createBD)
+	log.Fatal(http.ListenAndServe(":8090", router))
 }
